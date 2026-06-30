@@ -64,7 +64,7 @@ This is the part that matters most. We are looking for **clear, intentional
 engineering** — people who take pride in their code. We are explicitly *not*
 looking for a pile of generic, unexplained, AI-generated changes.
 
-Include a short **`DESIGN.md`** with your submission covering:
+Include a short [**`DESIGN.md`**](./DESIGN.md) with your submission covering:
 
 - How you diagnosed the bottlenecks. What was actually slow, and how did you
   confirm it?
