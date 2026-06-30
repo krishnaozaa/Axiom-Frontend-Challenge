@@ -50,6 +50,17 @@ The virtualized list mounts only the visible window (plus `overscan = 5` rows fo
   $$\text{startIndex} = \max\left(0, \lfloor\text{scrollTop} / 52\rfloor - \text{overscan}\right)$$
   This avoids dynamic size caching overhead and compiles with zero dependencies.
 
-### Real-Time Sorting vs. Visual Stability
-* **The Trade-off**: Re-sorting 10,000 items in real-time can make rows jump around under high-frequency drift, which affects a user's ability to click rows.
-* **Design Choice**: Real-time sorting was preserved to match the requirements. To keep the UI stable, selection state is linked to the token's unique ID rather than its index. The highlighted selected row and the detail sidebar remain stable even as rows change position in the virtual list.
+### Real-Time Sorting & Selection Persistence
+* **The Trade-off**: Under high-frequency sorting updates, rows constantly swap positions. If selection were tracked by list index, the active selection would remain at the same visual slot, incorrectly shifting to a different token on the next tick.
+* **Selection State Reasoning**: We link the selection state directly to a unique, immutable token ID (`selectedId`). Because the list re-orders dynamically under active market ticks, linking selection to a stable ID ensures that the active row highlight and the detailed sidebar continue to track the exact same token as it moves positions in the feed, avoiding visual mismatches or abrupt changes.
+
+---
+
+## 4. Visual & User Experience Enhancements (Bonus)
+Having successfully satisfied the performance goals ahead of schedule, we utilized the remaining time to transition the basic dashboard mockup into a premium, production-ready trading interface:
+* **Professional Typography**: Replaced default system fonts with Google Fonts' **Outfit** for sleek structural UI labels, and **JetBrains Mono** for numerical values and tickers. Tabular numbers are now cleanly aligned, matching live trading terminal feeds (e.g. Binance/TradingView).
+* **Emerald/Vibrant Color Scheme**: Replaced default colors with high-fidelity slate backdrops (`#07090e`, `#0d1117`), deep emerald green (`#10b981`) for positive changes, and vibrant red (`#ef4444`) for price drops.
+* **Interactive Row States & Selection Highlight Reasoning**: Implemented glassmorphic active-row selection backdrops (`rgba(16, 185, 129, 0.08)`) with a left-accented vertical border indicator (`border-left: 3px solid var(--accent)`). We selected this styling because it clearly distinguishes the selected row in high-density grids without creating visual clutter or competing with red/green percentage changes.
+* **Live Status Badge**: Added a pulsing animated green status badge in the header (**LIVE STREAM**) to visually reinforce active data feed state.
+* **Search & Sort Custom Inputs**: Replaced generic inputs with custom transitions, focused outline glows, and styled custom arrow chevron indicators on dropdown selectors.
+
