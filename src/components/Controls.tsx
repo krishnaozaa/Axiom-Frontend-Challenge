@@ -1,8 +1,6 @@
-export type SortKey =
-  | "marketCapUsd"
-  | "volume24hUsd"
-  | "priceChangePct"
-  | "ageSeconds";
+import { memo } from "react";
+import type { SortKey } from "../types";
+export type { SortKey };
 
 interface ControlsProps {
   query: string;
@@ -20,7 +18,13 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "ageSeconds", label: "Age" },
 ];
 
-export function Controls({
+/**
+ * Search + sort controls with token count display.
+ *
+ * Wrapped in `React.memo` so it skips re-renders on store ticks — it only
+ * re-renders when query, sortKey, or counts change.
+ */
+export const Controls = memo(function Controls({
   query,
   onQueryChange,
   sortKey,
@@ -52,4 +56,4 @@ export function Controls({
       </span>
     </div>
   );
-}
+});

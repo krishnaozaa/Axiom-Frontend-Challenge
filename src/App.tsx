@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useTokenStream } from "./data/useTokenStream";
 import { TokenList } from "./components/TokenList";
 import { Sidebar } from "./components/Sidebar";
@@ -8,8 +8,15 @@ const TOKEN_COUNT = 10_000;
 const UPDATE_INTERVAL_MS = 500;
 const CHURN = 0.3;
 
+/**
+ * Root component.
+ *
+ * Owns only lightweight UI state (query, sortKey, selectedId) and pushes
+ * filter/sort parameters into the store. No filtering, sorting, or linear
+ * finds happen in render — the store handles all of that outside React.
+ */
 export default function App() {
-  const tokens = useTokenStream({
+  const store = useTokenStream({
     count: TOKEN_COUNT,
     intervalMs: UPDATE_INTERVAL_MS,
     churn: CHURN,
@@ -19,19 +26,20 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("marketCapUsd");
 
-  // Filter + sort run on every render, including every stream tick.
-  const normalizedQuery = query.trim().toLowerCase();
-  const filtered = tokens.filter((token) => {
-    if (!normalizedQuery) return true;
-    return (
-      token.name.toLowerCase().includes(normalizedQuery) ||
-      token.ticker.toLowerCase().includes(normalizedQuery)
-    );
-  });
-  const sorted = filtered.slice().sort((a, b) => b[sortKey] - a[sortKey]);
+  // Push filter/sort into the store whenever they change.
+  useEffect(() => {
+    store.setQuery(query);
+  }, [store, query]);
 
-  const selectedToken =
-    tokens.find((token) => token.id === selectedId) ?? null;
+  useEffect(() => {
+    store.setSortKey(sortKey);
+  }, [store, sortKey]);
+
+  // Subscribe to the ordered-ids to derive counts for Controls.
+  const orderedIds = useSyncExternalStore(
+    store.subscribeOrder,
+    store.getOrderedIds,
+  );
 
   return (
     <div className="app">
@@ -47,8 +55,8 @@ export default function App() {
             onQueryChange={setQuery}
             sortKey={sortKey}
             onSortKeyChange={setSortKey}
-            visibleCount={sorted.length}
-            totalCount={tokens.length}
+            visibleCount={orderedIds.length}
+            totalCount={store.getTotal()}
           />
           <div className="feed__head">
             <div>Token</div>
@@ -59,13 +67,13 @@ export default function App() {
             <div className="num">24h</div>
           </div>
           <TokenList
-            tokens={sorted}
+            store={store}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
         </section>
 
-        <Sidebar token={selectedToken} />
+        <Sidebar selectedId={selectedId} store={store} />
       </div>
     </div>
   );

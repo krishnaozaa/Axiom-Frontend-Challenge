@@ -6,8 +6,11 @@ export function formatUsd(value: number): string {
   return `$${value.toFixed(6)}`;
 }
 
+/** Cached formatter — avoids the per-call overhead of `toLocaleString`. */
+const numFmt = new Intl.NumberFormat("en-US");
+
 export function formatNumber(value: number): string {
-  return value.toLocaleString("en-US");
+  return numFmt.format(value);
 }
 
 export function formatPct(value: number): string {

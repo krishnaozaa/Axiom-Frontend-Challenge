@@ -13,3 +13,10 @@ export interface Token {
   /** 24h price change as a percentage, e.g. 12.5 or -4.2. */
   priceChangePct: number;
 }
+
+/** Numeric token field used to rank the feed. */
+export type SortKey =
+  | "marketCapUsd"
+  | "volume24hUsd"
+  | "priceChangePct"
+  | "ageSeconds";

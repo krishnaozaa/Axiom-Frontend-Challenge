@@ -1,16 +1,34 @@
+import { useMemo, useCallback, useSyncExternalStore } from "react";
 import type { Token } from "../types";
-import {
-  formatUsd,
-  formatNumber,
-  formatPct,
-  formatAge,
-} from "../format";
+import type { TokenStore } from "../data/tokenStore";
+import { formatUsd, formatNumber, formatPct, formatAge } from "../format";
 
 interface SidebarProps {
-  token: Token | null;
+  selectedId: string | null;
+  store: TokenStore;
 }
 
-export function Sidebar({ token }: SidebarProps) {
+/**
+ * Detail panel for the selected token.
+ *
+ * Subscribes to the selected token via `useSyncExternalStore`, so it receives
+ * live updates for that token without re-rendering App or the list.
+ */
+export function Sidebar({ selectedId, store }: SidebarProps) {
+  // Stable subscribe/getSnapshot — re-created only when selectedId changes.
+  const subscribe = useMemo(() => {
+    if (!selectedId) return (_cb: () => void) => () => {};
+    return (cb: () => void) => store.subscribeToken(selectedId, cb);
+  }, [store, selectedId]);
+
+  const getSnapshot = useCallback(
+    (): Token | undefined =>
+      selectedId ? store.getToken(selectedId) : undefined,
+    [store, selectedId],
+  );
+
+  const token = useSyncExternalStore(subscribe, getSnapshot);
+
   if (!token) {
     return (
       <aside className="sidebar">

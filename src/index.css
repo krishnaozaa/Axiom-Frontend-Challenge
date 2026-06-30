@@ -129,6 +129,10 @@ body {
   overflow-x: hidden;
 }
 
+.feed__window {
+  will-change: transform;
+}
+
 .row {
   height: 52px;
   border-bottom: 1px solid var(--border);

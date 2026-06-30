@@ -1,8 +1,4 @@
-import type { Token } from "../types";
-// `SortKey` is a domain concept (which numeric field ranks the feed). It still
-// lives in Controls today; a later step relocates it. Type-only import, so this
-// is erased at build time — no runtime coupling to the component.
-import type { SortKey } from "../components/Controls";
+import type { Token, SortKey } from "../types";
 
 /**
  * Observable token store.
@@ -95,6 +91,9 @@ export class TokenStore {
       this.orderListeners.delete(listener);
     };
   };
+
+  /** Total number of tokens in the store (unfiltered). */
+  getTotal = (): number => this.tokens.size;
 
   // --- controls --------------------------------------------------------------
 
