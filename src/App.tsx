@@ -45,7 +45,10 @@ export default function App() {
     <div className="app">
       <header className="app__header">
         <span className="app__title">AXIOM</span>
-        <span className="app__subtitle">Token Feed</span>
+        <div className="app__status">
+          <span className="live-dot"></span>
+          <span className="app__subtitle">LIVE STREAM</span>
+        </div>
       </header>
 
       <div className="app__body">

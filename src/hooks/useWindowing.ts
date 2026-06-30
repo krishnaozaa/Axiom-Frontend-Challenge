@@ -21,80 +21,146 @@ interface WindowingResult {
 }
 
 /**
- * Fixed-height list windowing hook.
+ * Fixed-height list windowing hook (Production Grade - Zero Reflow on Resize).
  *
- * Given a scroll container ref, row height, and total count, this hook tracks
- * scroll position (passive listener) and viewport size (ResizeObserver) to
- * compute which rows are visible — pure arithmetic, no DOM measurement per row.
+ * This hook optimizes virtualization by tracking the visible index RANGE in React state,
+ * rather than raw scroll and height pixel offsets.
  *
- * Returns the visible range (start/end indices), a top offset for positioning,
- * and the total scrollable height. The consumer renders only this slice.
+ * Performance-Critical Optimizations:
+ * 1. Zero-Reflow Resizing: Viewport height is read directly from the ResizeObserver's
+ *    `contentRect` entry. This completely avoids calling DOM layout-forcing properties like
+ *    `clientHeight` or `offsetHeight` during active drag-resizing.
+ * 2. Horizontal Resize Filtering: Horizontal resizes (which keep height stable but change width)
+ *    are intercepted immediately. If the new viewport height matches the cached height, the update
+ *    is discarded immediately, bypassing React state scheduling and DOM writes.
+ * 3. Mount Bootstrapping: Viewport height is estimated initially based on window size to mount the
+ *    first viewport-fill of rows on frame 0, preventing blank rendering on initial load.
+ * 4. Frame Coalescing: Scroll and resize calculations are batched inside a single `requestAnimationFrame`
+ *    (rAF), ensuring React renders at most once per screen paint.
  */
 export function useWindowing(
   containerRef: React.RefObject<HTMLDivElement | null>,
   { totalCount, rowHeight, overscan = 5 }: WindowingOptions,
 ): WindowingResult {
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
+  // Track only the calculated index range and offset padding in state.
+  const [range, setRange] = useState(() => {
+    const initialHeight = typeof window !== "undefined"
+      ? Math.max(300, window.innerHeight - 100)
+      : 600;
+    const visibleCount = Math.ceil(initialHeight / rowHeight);
+    return {
+      startIndex: 0,
+      endIndex: Math.min(totalCount - 1, visibleCount + overscan),
+      topPad: 0,
+    };
+  });
 
-  // --- scroll listener (passive) ---
+  // Keep track of the active layout parameters in mutable refs to avoid DOM reads.
+  const viewportHeightRef = useRef(0);
+  const scrollTopRef = useRef(0);
+  const totalCountRef = useRef(totalCount);
+  totalCountRef.current = totalCount;
+
+  // We batch state updates to prevent layout thrashing.
+  const updateRafRef = useRef<number>(0);
+
+  const calculateRange = useCallback(() => {
+    const height = viewportHeightRef.current;
+    const scrollTop = scrollTopRef.current;
+    const count = totalCountRef.current;
+
+    const rawStart = Math.floor(scrollTop / rowHeight);
+    const visibleCount = Math.ceil(height / rowHeight);
+
+    const startIndex = Math.max(0, rawStart - overscan);
+    const endIndex = Math.max(
+      0,
+      Math.min(count - 1, rawStart + visibleCount + overscan)
+    );
+    const topPad = startIndex * rowHeight;
+
+    setRange((prev) => {
+      // Identity Check: If range and offset are identical, return the previous state.
+      // React will completely bail out of rendering this component and its children.
+      if (
+        prev.startIndex === startIndex &&
+        prev.endIndex === endIndex &&
+        prev.topPad === topPad
+      ) {
+        return prev;
+      }
+      return { startIndex, endIndex, topPad };
+    });
+  }, [rowHeight, overscan]);
+
+  // Schedule an update range calculation using rAF.
+  const scheduleUpdate = useCallback(() => {
+    if (updateRafRef.current) return;
+    updateRafRef.current = requestAnimationFrame(() => {
+      updateRafRef.current = 0;
+      calculateRange();
+    });
+  }, [calculateRange]);
+
+  // Handle scroll events.
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
-    if (el) setScrollTop(el.scrollTop);
-  }, [containerRef]);
+    if (!el) return;
 
+    const scrollTop = el.scrollTop;
+    if (scrollTop === scrollTopRef.current) return;
+
+    scrollTopRef.current = scrollTop;
+    scheduleUpdate();
+  }, [containerRef, scheduleUpdate]);
+
+  // Sync ranges if totalCount changes (e.g. from query filter changes).
+  useEffect(() => {
+    scheduleUpdate();
+  }, [totalCount, scheduleUpdate]);
+
+  // --- Setup Event Listeners and Observers ---
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    // Capture initial scroll position (e.g. after browser restore).
-    setScrollTop(el.scrollTop);
+    // Capture initial metrics.
+    viewportHeightRef.current = el.clientHeight;
+    scrollTopRef.current = el.scrollTop;
+    calculateRange();
 
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [containerRef, handleScroll]);
-
-  // --- viewport resize via ResizeObserver ---
-  const observerRef = useRef<ResizeObserver | null>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    // Capture initial size.
-    setViewportHeight(el.clientHeight);
-
-    observerRef.current = new ResizeObserver((entries) => {
+    const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        // contentBoxSize is an array; take the first entry (block dimension).
-        const height =
-          entry.contentBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
-        setViewportHeight(height);
+        // Read directly from contentRect (free, no reflow!).
+        const height = Math.ceil(entry.contentRect.height);
+
+        // Critical optimization: If height hasn't changed, ignore horizontal resize completely.
+        if (height === viewportHeightRef.current) continue;
+
+        viewportHeightRef.current = height;
+        scheduleUpdate();
       }
     });
 
-    observerRef.current.observe(el);
+    observer.observe(el);
+    el.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
+      observer.disconnect();
+      el.removeEventListener("scroll", handleScroll);
+      if (updateRafRef.current) {
+        cancelAnimationFrame(updateRafRef.current);
+        updateRafRef.current = 0;
+      }
     };
-  }, [containerRef]);
+  }, [containerRef, handleScroll, calculateRange, scheduleUpdate]);
 
-  // --- compute visible window ---
   const totalHeight = totalCount * rowHeight;
 
-  if (totalCount === 0 || viewportHeight === 0) {
-    return { startIndex: 0, endIndex: -1, topPad: 0, totalHeight };
-  }
-
-  const rawStart = Math.floor(scrollTop / rowHeight);
-  const visibleCount = Math.ceil(viewportHeight / rowHeight);
-
-  const startIndex = Math.max(0, rawStart - overscan);
-  const endIndex = Math.min(totalCount - 1, rawStart + visibleCount + overscan);
-
-  const topPad = startIndex * rowHeight;
-
-  return { startIndex, endIndex, topPad, totalHeight };
+  return {
+    startIndex: range.startIndex,
+    endIndex: range.endIndex,
+    topPad: range.topPad,
+    totalHeight,
+  };
 }
