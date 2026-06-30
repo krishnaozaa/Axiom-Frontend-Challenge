@@ -14,11 +14,11 @@ To achieve responsiveness under high-frequency updates, the application was refa
 
 ```mermaid
 graph TD
-    Stream[useTokenStream Simulation] =>|applyTick| Store[(TokenStore)]
-    Store =>|Order Channel| List[TokenList useSyncExternalStore]
-    Store =>|Token Channel| Rows[TokenRow useSyncExternalStore]
-    List =>|Range Arithmetic| VisibleRows[Visible TokenRows]
-    VisibleRows =>|GPU Composition| Viewport[Viewport Render]
+    Stream[useTokenStream Simulation] -->|applyTick| Store[(TokenStore)]
+    Store -->|Order Channel| List[TokenList useSyncExternalStore]
+    Store -->|Token Channel| Rows[TokenRow useSyncExternalStore]
+    List -->|Range Arithmetic| VisibleRows[Visible TokenRows]
+    VisibleRows -->|GPU Composition| Viewport[Viewport Render]
 ```
 
 ### Pub/Sub State Decoupling
